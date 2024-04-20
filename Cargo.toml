@@ -24,3 +24,4 @@ anyhow = "1.0.82"
 tokio = "1.37.0"
 chrono = "0.4.38"
 juxt_md5 = "0.1.1"
+clap = { version="4.5.4", features=["derive"] }
