@@ -6,38 +6,11 @@ use futures::StreamExt;
 use log::{debug, info, warn};
 use std::{path, str::FromStr};
 
+use util::schema::{Action, UploadForm};
+
 #[get("/ping")]
 async fn ping() -> Result<impl Responder> {
     Ok(HttpResponse::Ok().body("Ping OK!!!"))
-}
-
-#[derive(Debug, Default)]
-struct UploadForm {
-    action: Action,
-    content: String,
-    target_file_path: String,
-}
-
-#[derive(Debug)]
-enum Action {
-    Safe,
-    Force,
-}
-
-impl Action {
-    fn from_str(action: &str) -> Self {
-        match action {
-            "safe" => Action::Safe,
-            "fore" => Action::Force,
-            _ => Action::Safe,
-        }
-    }
-}
-
-impl Default for Action {
-    fn default() -> Self {
-        Action::Safe
-    }
 }
 
 #[post("/")]

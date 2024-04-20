@@ -13,6 +13,11 @@ path = "src/sync-server/bin/main.rs"
 name = "sync-client"
 path = "src/sync-client/bin/main.rs"
 
+[lib]
+name = "util"
+path = "src/util/mod.rs"
+
+
 [dependencies]
 actix-web = "4"
 serde = { version = "1.0.198", features = ["derive"]}
@@ -21,7 +26,9 @@ futures = "0.3"
 log = "0.4"
 env_logger = "0.11.3"
 anyhow = "1.0.82"
-tokio = "1.37.0"
+tokio = {version="1.37.0", features=["full"]}
 chrono = "0.4.38"
 juxt_md5 = "0.1.1"
 clap = { version="4.5.4", features=["derive"] }
+reqwest = { version = "0.12", features = ["json"] }
+
