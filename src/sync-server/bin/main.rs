@@ -1,11 +1,9 @@
 use actix_multipart::{Field, Multipart};
-use actix_web::{
-    get, post, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder, Result,
-};
+use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder, Result};
 use chrono::Local;
 use futures::StreamExt;
 use log::{debug, warn};
-use std::path;
+use std::{path, str::FromStr};
 
 #[get("/ping")]
 async fn ping() -> Result<impl Responder> {
@@ -99,8 +97,22 @@ async fn safe_create_backup_dir(dir_path: &str) -> std::result::Result<(), Strin
     Ok(())
 }
 
-async fn safe_write(form: &UploadForm) -> std::result::Result<(), String> {
+async fn safe_write(form: &UploadForm) -> std::result::Result<String, String> {
     let target_path = path::Path::new(&form.target_file_path);
+    // Check md5. Return directly if md5 does not change.
+    if target_path.exists() {
+        let old_content = tokio::fs::read_to_string(&target_path)
+            .await
+            .unwrap_or_default();
+        if if_content_md5_equal(&form.content, &old_content) {
+            debug!(
+                "file({:?}) is not changed.",
+                target_path.file_name().unwrap_or_default()
+            );
+            return Ok(format!("file is not changed."));
+        }
+    }
+
     let filename = target_path.file_name().unwrap().to_str().unwrap();
     let filename_without_ext = path::Path::new(filename)
         .file_stem()
@@ -109,46 +121,48 @@ async fn safe_write(form: &UploadForm) -> std::result::Result<(), String> {
         .unwrap_or(filename);
     let dir = target_path.parent().unwrap().to_str().unwrap().to_string();
 
-    debug!(
-        "1111: {:?} {:?} {:?}",
-        &filename, &filename_without_ext, &dir
-    );
-
     // create backup dir
     let dot_backup_dir = format!("{}/.{}", dir, filename_without_ext);
+    debug!("if need safe create backup dir: {}", &dot_backup_dir);
     safe_create_backup_dir(&dot_backup_dir).await?;
 
     // backup file
-    if let Err(err) = tokio::fs::copy(
-        target_path,
-        format!(
+    if target_path.exists() {
+        let backup_file = format!(
             "{}/{}.{}",
             dot_backup_dir,
             filename,
             Local::now().format("%Y%m%d_%H%M%S")
-        ),
-    )
-    .await
-    {
-        return Err(format!("copy backup err: {}", err));
+        );
+        if let Err(err) = tokio::fs::copy(target_path, &backup_file).await {
+            return Err(format!("copy backup err: {}", err));
+        }
+        debug!("backup file({}) ok", backup_file);
     }
-
-    // TODO Check md5. Return directly if md5 does not change.
 
     // truncate && write new content
     if let Err(err) = tokio::fs::write(target_path, &form.content).await {
         return Err(format!("write file err: {}", err));
     }
+    debug!("write new content ok, file={:?}", target_path);
 
-    Ok(())
+    Ok("safe write ok".to_string())
 }
 
-async fn force_write(form: &UploadForm) -> std::result::Result<(), String> {
+fn if_content_md5_equal(new_content: &str, old_content: &str) -> bool {
+    let new_md5 = juxt_md5::Md5::from_str(new_content).unwrap();
+    let old_md5 = juxt_md5::Md5::from_str(old_content).unwrap();
+    debug!("new_md5 is: {}, old_md5 is: {}", new_md5, old_md5);
+
+    new_content == old_content
+}
+
+async fn force_write(form: &UploadForm) -> std::result::Result<String, String> {
     let target_path = path::Path::new(&form.target_file_path);
     if let Err(err) = tokio::fs::write(target_path, &form.content).await {
         return Err(format!("write file err: {}", err));
     }
-    Ok(())
+    Ok("force write ok".to_string())
 }
 
 fn validate_upload_args(form: &UploadForm) -> std::result::Result<(), String> {

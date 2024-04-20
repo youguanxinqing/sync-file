@@ -907,6 +907,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "juxt_md5"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc37a09d35fbc93eae2f580790fc2985e5511acbc0c382af90a6898a717102a8"
+
+[[package]]
 name = "language-tags"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1358,6 +1364,7 @@ dependencies = [
  "chrono",
  "env_logger",
  "futures",
+ "juxt_md5",
  "log",
  "serde",
  "tokio",
