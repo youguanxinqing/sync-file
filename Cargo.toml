@@ -17,4 +17,6 @@ path = "src/sync-client/bin/main.rs"
 actix-web = "4"
 serde = { version = "1.0.198", features = ["derive"]}
 actix-multipart = "0.6.1"
-
+futures = "0.3"
+log = "0.4"
+env_logger = "0.11.3"
