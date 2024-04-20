@@ -1,0 +1,20 @@
+[package]
+name = "sync-file"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "sync-server"
+path = "src/sync-server/bin/main.rs"
+
+[[bin]]
+name = "sync-client"
+path = "src/sync-client/bin/main.rs"
+
+[dependencies]
+actix-web = "4"
+serde = { version = "1.0.198", features = ["derive"]}
+actix-multipart = "0.6.1"
+
