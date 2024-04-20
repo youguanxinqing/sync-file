@@ -1,10 +1,10 @@
 use actix_multipart::{Field, Multipart};
 use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder, Result};
 use chrono::Local;
+use clap::Parser;
 use futures::StreamExt;
 use log::{debug, info, warn};
 use std::{path, str::FromStr};
-use clap::Parser;
 
 #[get("/ping")]
 async fn ping() -> Result<impl Responder> {
@@ -195,7 +195,7 @@ async fn read_content_disposition(chunk: &mut Field) -> String {
 struct Args {
     #[arg(long, default_value_t = String::from("127.0.0.1"))]
     host: String,
-    
+
     #[arg(long, default_value_t = 9091)]
     port: u16,
 }
@@ -203,7 +203,7 @@ struct Args {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
-    
+
     let args = Args::parse();
     info!("Start sync-server. Args={:?}", args);
 
