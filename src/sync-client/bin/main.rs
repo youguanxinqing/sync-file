@@ -1,6 +1,5 @@
 use clap::Parser;
 use std::{fs, path};
-use util::schema::Action;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -20,31 +19,22 @@ struct Args {
     ping: bool,
 }
 
-fn panic_if_no_file(filename: &str) {
+fn panic_if_not_expect_file(filename: &str) {
     let path_obj = path::Path::new(filename);
     if !path_obj.exists() {
-        panic!("Not found file({:?})", &path_obj);
+        panic!("not found local file({:?})", &path_obj);
     }
-}
 
-fn validate_for_upload(args: &Args) {
-    panic_if_no_file(&args.remote_file_path.clone().unwrap_or_default());
-    panic_if_no_file(&args.local_file_path.clone().unwrap_or_default());
-
-    let local_file_path = args.local_file_path.clone().unwrap();
-    let path_obj = path::Path::new(&local_file_path);
-    if !path_obj.exists() {
-        panic!(
-            "not found local file({})",
-            path_obj.to_str().unwrap_or_default()
-        );
-    }
-    if path_obj.is_file() {
+    if !path_obj.is_file() {
         panic!(
             "local_file_path is not a file({})",
             path_obj.to_str().unwrap_or_default()
         );
     }
+}
+
+fn validate_for_upload(args: &Args) {
+    panic_if_not_expect_file(&args.local_file_path.clone().unwrap_or_default());
 }
 
 fn upload_file(args: &Args) {
