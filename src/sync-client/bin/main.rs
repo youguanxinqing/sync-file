@@ -1,17 +1,20 @@
-use log::{debug, info, warn};
 use clap::Parser;
-use std::path;
+use std::{fs, path};
+use util::schema::Action;
 
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(long)]
-    target_addr: String,
+    addr: String,
 
     #[arg(long, default_value_t = String::from("safe"))]
     action: String,
 
     #[arg(long)]
-    target_file_path: String,
+    local_file_path: Option<String>,
+
+    #[arg(long)]
+    remote_file_path: Option<String>,
 
     #[arg(long, default_value_t = false)]
     ping: bool,
@@ -24,27 +27,67 @@ fn panic_if_no_file(filename: &str) {
     }
 }
 
-fn ping_server() {
-
-}
-
 fn validate_for_upload(args: &Args) {
-    panic_if_no_file(&args.target_file_path);
+    panic_if_no_file(&args.remote_file_path.clone().unwrap_or_default());
+    panic_if_no_file(&args.local_file_path.clone().unwrap_or_default());
+
+    let local_file_path = args.local_file_path.clone().unwrap();
+    let path_obj = path::Path::new(&local_file_path);
+    if !path_obj.exists() {
+        panic!(
+            "not found local file({})",
+            path_obj.to_str().unwrap_or_default()
+        );
+    }
+    if path_obj.is_file() {
+        panic!(
+            "local_file_path is not a file({})",
+            path_obj.to_str().unwrap_or_default()
+        );
+    }
 }
 
 fn upload_file(args: &Args) {
+    let file_strem = fs::read(args.local_file_path.clone().unwrap().as_str()).unwrap();
+    let file_part = reqwest::blocking::multipart::Part::bytes(file_strem)
+        .file_name("file")
+        .mime_str("text/plain")
+        .unwrap();
+    let multipart_form = reqwest::blocking::multipart::Form::new()
+        .text("action", args.action.clone())
+        .text("target_file_path", args.remote_file_path.clone().unwrap())
+        .part("file", file_part);
 
+    let url = format!("http://{}/", args.addr);
+    let client = reqwest::blocking::Client::new();
+    match client.post(url).multipart(multipart_form).send() {
+        Err(err) => {
+            println!("send request err: {}", err)
+        }
+        Ok(resp) => {
+            println!("{}", resp.text().unwrap())
+        }
+    }
 }
 
+fn ping_server(args: &Args) {
+    let url = format!("http://{}/ping", args.addr);
+    match reqwest::blocking::get(url) {
+        Err(err) => {
+            println!("ping server err: {}", err);
+        }
+        Ok(resp) => {
+            println!("{}", resp.text().unwrap_or_default());
+        }
+    }
+}
 
 fn main() {
-    env_logger::init();
-
     let args = Args::parse();
-    info!("args: {:?}", args);
+    println!("args: {:?}", args);
 
     if args.ping {
-        ping_server()
+        ping_server(&args);
     } else {
         validate_for_upload(&args);
         upload_file(&args);

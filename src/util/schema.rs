@@ -1,4 +1,3 @@
-
 #[derive(Debug, Default)]
 pub struct UploadForm {
     pub action: Action,
@@ -16,8 +15,15 @@ impl Action {
     pub fn from_str(action: &str) -> Self {
         match action {
             "safe" => Action::Safe,
-            "fore" => Action::Force,
+            "force" => Action::Force,
             _ => Action::Safe,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::Safe => "safe".to_string(),
+            Self::Force => "force".to_string(),
         }
     }
 }
