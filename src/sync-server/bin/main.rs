@@ -3,7 +3,7 @@ use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Resp
 use chrono::Local;
 use clap::Parser;
 use futures::StreamExt;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use std::{path, str::FromStr};
 
 use util::schema::{Action, UploadForm};
@@ -25,7 +25,16 @@ async fn upload(req: HttpRequest, bytes: web::Payload) -> Result<impl Responder>
 
         let content_disposition = chunk.content_disposition().clone();
         let key = content_disposition.get_name().unwrap_or("");
+
         let value = read_content_disposition(&mut chunk).await;
+        if value.is_err() {
+            error!("read_content_disposition err: {}", value.err().unwrap());
+            return Ok(
+                HttpResponse::InternalServerError().body(format!("read content disposition err",))
+            );
+        }
+        let value = value.unwrap();
+
         match key {
             "action" => {
                 form.action = Action::from_str(&value);
@@ -152,16 +161,19 @@ fn validate_upload_args(form: &UploadForm) -> std::result::Result<(), String> {
     Ok(())
 }
 
-async fn read_content_disposition(chunk: &mut Field) -> String {
-    let mut s = String::default();
+async fn read_content_disposition(chunk: &mut Field) -> anyhow::Result<String> {
+    let mut buf = Vec::new();
     while let Some(chunk_content) = chunk.next().await {
-        s.push_str(
-            String::from_utf8(chunk_content.unwrap_or_default().to_vec())
-                .unwrap_or_default()
-                .as_ref(),
-        );
+        match chunk_content {
+            Err(e) => {
+                anyhow::bail!("read chunk err: {}", e);
+            }
+            Ok(chunk_content) => {
+                buf.extend(chunk_content);
+            }
+        }
     }
-    return s;
+    return Ok(String::from_utf8(buf)?);
 }
 
 #[derive(Parser, Debug)]
