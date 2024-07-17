@@ -52,10 +52,12 @@ fn upload_file(args: &Args) {
     let client = reqwest::blocking::Client::new();
     match client.post(url).multipart(multipart_form).send() {
         Err(err) => {
-            println!("send request err: {}", err)
+            eprintln!("send request err: {}", err);
+            std::process::exit(127);
         }
         Ok(resp) => {
-            println!("{}", resp.text().unwrap())
+            println!("{}", resp.text().unwrap());
+            std::process::exit(0);
         }
     }
 }
@@ -64,10 +66,12 @@ fn ping_server(args: &Args) {
     let url = format!("http://{}/ping", args.addr);
     match reqwest::blocking::get(url) {
         Err(err) => {
-            println!("ping server err: {}", err);
+            eprintln!("ping server err: {}", err);
+            std::process::exit(127);
         }
         Ok(resp) => {
             println!("{}", resp.text().unwrap_or_default());
+            std::process::exit(0);
         }
     }
 }
