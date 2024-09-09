@@ -1,5 +1,5 @@
 use clap::Parser;
-use std::{env::args, fs, path};
+use std::{fs, path};
 
 #[derive(Parser, Debug)]
 struct Args {
