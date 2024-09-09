@@ -20,7 +20,7 @@ struct Args {
 
     #[arg(
         long,
-        default_value_t = true,
+        default_value_t = false,
         help = "Enable https request of insecure."
     )]
     enable_insecure_ssl: bool,
