@@ -21,7 +21,7 @@ async fn main() -> std::io::Result<()> {
     let args = Args::parse();
     info!("Start sync-server. Args={:?}", args);
 
-    HttpServer::new(|| App::new().service(api::ping_api).service(api::upload_api))
+    HttpServer::new(|| App::new().service(api::ping_api).service(api::upload_api).service(api::download_api))
         .bind((args.host, args.port))
         .expect("failed to bind addr")
         .run()

@@ -7,7 +7,7 @@ use std::{path, str::FromStr};
 
 use util::schema::{Action, UploadForm};
 
-#[post("/")]
+#[post("/v1/upload")]
 pub async fn upload(req: HttpRequest, bytes: web::Payload) -> Result<impl Responder> {
     let mut multipart = Multipart::new(req.headers(), bytes);
 

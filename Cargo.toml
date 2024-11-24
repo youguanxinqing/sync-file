@@ -31,4 +31,4 @@ chrono = "0.4.38"
 juxt_md5 = "0.1.1"
 clap = { version="4.5.4", features=["derive"] }
 reqwest = { version = "0.12", features = ["json", "blocking", "multipart", "rustls-tls"] }
-
+async-stream = "0.3.6"
