@@ -1,5 +1,5 @@
 use clap::Parser;
-use std::{fs, path};
+use std::{collections::HashMap, fs, path};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -14,6 +14,9 @@ struct Args {
 
     #[arg(long)]
     remote_file_path: Option<String>,
+
+    #[arg(long)]
+    file_mappings: Option<String>,
 
     #[arg(long, default_value_t = false)]
     ping: bool,
@@ -71,6 +74,60 @@ fn upload_file(args: &Args, cfg: &Config) -> anyhow::Result<()> {
     #[allow(unreachable_code)]
     Ok(())
 }
+
+// mappings format: local_file1:remote_file1,local_file2:remote_file2,...
+// return {
+//   local_file1: remote_file1,
+//   local_file2: remote_file2,
+// }
+fn parse_file_mappings(mappings: &str) -> anyhow::Result<HashMap<String, String>> {
+    let mut m: HashMap<String, String> = HashMap::new();
+    mappings.split(",").for_each(|chunk| {
+        let kv_list: Vec<&str> = chunk.split(":").collect();
+        let (local_file, remote_file) = (kv_list[0], kv_list[1]);
+        m.insert(local_file.into(), remote_file.into());
+    });
+    Ok(m)
+}
+
+fn upload_file_mappings(args: &Args, cfg: &Config) -> anyhow::Result<()> {
+    // parse file mappings
+    let mappings = parse_file_mappings(args.file_mappings.as_ref().unwrap())?;
+
+    // http client
+    let url = format!("{}://{}/", cfg.protocol.data(), args.addr);
+    let client = cfg.protocol.new_client()?;
+
+    let mut fail_list = Vec::new();
+    
+    for (local_file, remote_file) in mappings.into_iter() {
+        let file_strem = fs::read(&local_file).unwrap();
+        let file_part = reqwest::blocking::multipart::Part::bytes(file_strem)
+            .file_name("file")
+            .mime_str("text/plain")
+            .unwrap();
+        let multipart_form = reqwest::blocking::multipart::Form::new()
+            .text("action", args.action.clone())
+            .text("target_file_path", remote_file)
+            .part("file", file_part);
+
+        match client.post(&url).multipart(multipart_form).send() {
+            Err(err) => {
+                fail_list.push(format!("{}:{}", local_file, err));
+            }
+            Ok(resp) => {
+                println!("{}: {}", local_file, resp.text().unwrap());
+            }
+        }
+    }
+
+    if fail_list.len() > 0 {
+        anyhow::bail!("{}", fail_list.join("\n"));
+    }
+    
+    Ok(())
+}
+
 
 fn ping_server(args: &Args, cfg: &Config) -> anyhow::Result<()> {
     let url = format!("{}://{}/ping", &cfg.protocol.data(), args.addr);
@@ -147,6 +204,8 @@ fn main() -> anyhow::Result<()> {
 
     if args.ping {
         ping_server(&args, &cfg)?;
+    } else if args.file_mappings.is_some() {
+        upload_file_mappings(&args, &cfg)?;
     } else {
         validate_for_upload(&args);
         upload_file(&args, &cfg)?;
