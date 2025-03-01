@@ -28,7 +28,7 @@ env_logger = "0.11.3"
 anyhow = "1.0.82"
 tokio = {version="1.37.0", features=["full"]}
 chrono = "0.4.38"
-juxt_md5 = "0.1.1"
 clap = { version="4.5.4", features=["derive"] }
 reqwest = { version = "0.12", features = ["json", "blocking", "multipart", "rustls-tls"] }
+md5 = "0.7.0"
 

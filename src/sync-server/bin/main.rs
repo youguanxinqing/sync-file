@@ -4,7 +4,7 @@ use chrono::Local;
 use clap::Parser;
 use futures::StreamExt;
 use log::{debug, error, info, warn};
-use std::{path, str::FromStr};
+use std::path;
 
 use util::schema::{Action, UploadForm};
 
@@ -133,9 +133,9 @@ async fn safe_write(form: &UploadForm) -> std::result::Result<String, String> {
 }
 
 fn if_content_md5_equal(new_content: &str, old_content: &str) -> bool {
-    let new_md5 = juxt_md5::Md5::from_str(new_content).unwrap();
-    let old_md5 = juxt_md5::Md5::from_str(old_content).unwrap();
-    debug!("new_md5 is: {}, old_md5 is: {}", new_md5, old_md5);
+    let new_md5 = md5::compute(new_content);
+    let old_md5 = md5::compute(old_content);
+    debug!("new_md5 is: {:?}, old_md5 is: {:?}", new_md5, old_md5);
 
     new_content == old_content
 }
