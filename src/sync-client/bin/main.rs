@@ -15,6 +15,9 @@ struct Args {
     #[arg(long)]
     remote_file_path: Option<String>,
 
+    #[arg(long, help = "Specify HOST in request header")]
+    host: Option<String>,
+
     #[arg(long)]
     file_mappings: Option<String>,
 
@@ -60,7 +63,12 @@ fn upload_file(args: &Args, cfg: &Config) -> anyhow::Result<()> {
 
     let url = format!("{}://{}/", cfg.protocol.data(), args.addr);
     let client = cfg.protocol.new_client()?;
-    match client.post(url).multipart(multipart_form).send() {
+    let request = (if args.host.is_some() {
+        client.post(url).header("Host", args.host.clone().unwrap())
+    } else {
+        client.post(url)
+    }).multipart(multipart_form);
+    match request.send() {
         Err(err) => {
             eprintln!("send request err: {}", err);
             std::process::exit(127);
