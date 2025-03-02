@@ -67,7 +67,8 @@ fn upload_file(args: &Args, cfg: &Config) -> anyhow::Result<()> {
         client.post(url).header("Host", args.host.clone().unwrap())
     } else {
         client.post(url)
-    }).multipart(multipart_form);
+    })
+    .multipart(multipart_form);
     match request.send() {
         Err(err) => {
             eprintln!("send request err: {}", err);
@@ -107,7 +108,7 @@ fn upload_file_mappings(args: &Args, cfg: &Config) -> anyhow::Result<()> {
     let client = cfg.protocol.new_client()?;
 
     let mut fail_list = Vec::new();
-    
+
     for (local_file, remote_file) in mappings.into_iter() {
         let file_strem = fs::read(&local_file).unwrap();
         let file_part = reqwest::blocking::multipart::Part::bytes(file_strem)
@@ -119,7 +120,14 @@ fn upload_file_mappings(args: &Args, cfg: &Config) -> anyhow::Result<()> {
             .text("target_file_path", remote_file)
             .part("file", file_part);
 
-        match client.post(&url).multipart(multipart_form).send() {
+        // make http request
+        let request = (if args.host.is_some() {
+            client.post(&url).header("Host", args.host.clone().unwrap())
+        } else {
+            client.post(&url)
+        })
+        .multipart(multipart_form);
+        match request.send() {
             Err(err) => {
                 fail_list.push(format!("{}:{}", local_file, err));
             }
@@ -132,10 +140,9 @@ fn upload_file_mappings(args: &Args, cfg: &Config) -> anyhow::Result<()> {
     if fail_list.len() > 0 {
         anyhow::bail!("{}", fail_list.join("\n"));
     }
-    
+
     Ok(())
 }
-
 
 fn ping_server(args: &Args, cfg: &Config) -> anyhow::Result<()> {
     let url = format!("{}://{}/ping", &cfg.protocol.data(), args.addr);
