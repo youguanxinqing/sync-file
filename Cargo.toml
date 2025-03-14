@@ -14,8 +14,8 @@ name = "sync-client"
 path = "src/sync-client/bin/main.rs"
 
 [lib]
-name = "util"
-path = "src/util/mod.rs"
+name = "lib"
+path = "src/lib/mod.rs"
 
 
 [dependencies]

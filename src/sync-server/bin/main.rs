@@ -6,7 +6,8 @@ use futures::StreamExt;
 use log::{debug, error, info, warn};
 use std::path;
 
-use util::schema::{Action, UploadForm};
+use lib::util::schema::{Action, UploadForm};
+
 
 #[get("/ping")]
 async fn ping() -> Result<impl Responder> {
