@@ -61,7 +61,7 @@ fn upload_file(args: &Args, cfg: &Config) -> anyhow::Result<()> {
         .text("target_file_path", args.remote_file_path.clone().unwrap())
         .part("file", file_part);
 
-    let url = format!("{}://{}/", cfg.protocol.data(), args.addr);
+    let url = format!("{}://{}/upload", cfg.protocol.data(), args.addr);
     let client = cfg.protocol.new_client()?;
     let request = (if args.host.is_some() {
         client.post(url).header("Host", args.host.clone().unwrap())
@@ -104,7 +104,7 @@ fn upload_file_mappings(args: &Args, cfg: &Config) -> anyhow::Result<()> {
     let mappings = parse_file_mappings(args.file_mappings.as_ref().unwrap())?;
 
     // http client
-    let url = format!("{}://{}/", cfg.protocol.data(), args.addr);
+    let url = format!("{}://{}/upload", cfg.protocol.data(), args.addr);
     let client = cfg.protocol.new_client()?;
 
     let mut fail_list = Vec::new();
@@ -137,7 +137,7 @@ fn upload_file_mappings(args: &Args, cfg: &Config) -> anyhow::Result<()> {
         }
     }
 
-    if fail_list.len() > 0 {
+    if !fail_list.is_empty() {
         anyhow::bail!("{}", fail_list.join("\n"));
     }
 
@@ -160,8 +160,8 @@ fn ping_server(args: &Args, cfg: &Config) -> anyhow::Result<()> {
 }
 
 enum ReqProtocol {
-    HTTP(String),
-    HTTPS(String),
+    Http(String),
+    Https(String),
 }
 
 impl ReqProtocol {
@@ -169,28 +169,28 @@ impl ReqProtocol {
         let protocol: String = protocol.into();
         let protocol: &str = &protocol.to_lowercase();
         match protocol {
-            "http" => Self::HTTP(protocol.to_string()),
-            "https" => Self::HTTPS(protocol.to_string()),
+            "http" => Self::Http(protocol.to_string()),
+            "https" => Self::Https(protocol.to_string()),
             _ => unreachable!(),
         }
     }
 
     fn data(&self) -> String {
         match self {
-            Self::HTTP(data) => data.clone(),
-            Self::HTTPS(data) => data.clone(),
+            Self::Http(data) => data.clone(),
+            Self::Https(data) => data.clone(),
         }
     }
 
     fn new_client(&self) -> anyhow::Result<reqwest::blocking::Client> {
         match self {
-            ReqProtocol::HTTP(_) => reqwest::blocking::Client::builder()
+            ReqProtocol::Http(_) => reqwest::blocking::Client::builder()
                 .build()
-                .map_err(|e| anyhow::Error::from(e)),
-            ReqProtocol::HTTPS(_) => reqwest::blocking::Client::builder()
+                .map_err(anyhow::Error::from),
+            ReqProtocol::Https(_) => reqwest::blocking::Client::builder()
                 .danger_accept_invalid_certs(true)
                 .build()
-                .map_err(|e| anyhow::Error::from(e)),
+                .map_err(anyhow::Error::from),
         }
     }
 }

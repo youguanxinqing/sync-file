@@ -1,3 +1,5 @@
+use std::{fmt::Display, str::FromStr};
+
 #[derive(Debug, Default)]
 pub struct UploadForm {
     pub action: Action,
@@ -5,31 +7,40 @@ pub struct UploadForm {
     pub target_file_path: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum Action {
+    #[default]
     Safe,
     Force,
 }
 
-impl Action {
-    pub fn from_str(action: &str) -> Self {
-        match action {
-            "safe" => Action::Safe,
-            "force" => Action::Force,
-            _ => Action::Safe,
-        }
-    }
+#[derive(Debug)]
+pub struct NotActionError;
 
-    pub fn to_string(&self) -> String {
-        match self {
-            Self::Safe => "safe".to_string(),
-            Self::Force => "force".to_string(),
-        }
+impl Display for NotActionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        "not support action error".fmt(f)
     }
 }
 
-impl Default for Action {
-    fn default() -> Self {
-        Action::Safe
+impl FromStr for Action {
+    type Err = NotActionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let action = match s {
+            "safe" => Action::Safe,
+            "force" => Action::Force,
+            _ => Action::Safe,
+        };
+        Ok(action)
+    }
+}
+
+impl Display for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Safe => f.write_str("safe"),
+            Self::Force => f.write_str("force"),
+        }
     }
 }
