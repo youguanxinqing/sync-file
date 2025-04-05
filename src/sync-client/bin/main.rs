@@ -61,7 +61,7 @@ fn upload_file(args: &Args, cfg: &Config) -> anyhow::Result<()> {
         .text("target_file_path", args.remote_file_path.clone().unwrap())
         .part("file", file_part);
 
-    let url = format!("{}://{}/ping", cfg.protocol.data(), args.addr);
+    let url = format!("{}://{}/upload", cfg.protocol.data(), args.addr);
     let client = cfg.protocol.new_client()?;
     let request = (if args.host.is_some() {
         client.post(url).header("Host", args.host.clone().unwrap())
