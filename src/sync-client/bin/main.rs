@@ -1,8 +1,31 @@
-use clap::Parser;
+use chrono::Local;
+use clap::{arg, command, ArgAction, Args as ClapArgs, Parser};
+use log::{debug, error, info, LevelFilter};
+use std::io::prelude::Write;
 use std::{collections::HashMap, fs, path};
+
+#[derive(ClapArgs, Debug, PartialEq)]
+struct Global {
+    /// Verbose log
+    #[arg(short, long, action = ArgAction::Count)]
+    verbose: u8,
+}
+
+impl Global {
+    fn log_filter_level(&self) -> LevelFilter {
+        match self.verbose {
+            0 => LevelFilter::Info,
+            1 => LevelFilter::Debug,
+            _ => LevelFilter::Trace,
+        }
+    }
+}
 
 #[derive(Parser, Debug)]
 struct Args {
+    #[command(flatten)]
+    global: Global,
+
     #[arg(long)]
     addr: String,
 
@@ -71,11 +94,11 @@ fn upload_file(args: &Args, cfg: &Config) -> anyhow::Result<()> {
     .multipart(multipart_form);
     match request.send() {
         Err(err) => {
-            eprintln!("send request err: {}", err);
+            error!("send request err: {}", err);
             std::process::exit(127);
         }
         Ok(resp) => {
-            println!("{}", resp.text().unwrap());
+            info!("{}", resp.text().unwrap());
             std::process::exit(0);
         }
     }
@@ -132,7 +155,7 @@ fn upload_file_mappings(args: &Args, cfg: &Config) -> anyhow::Result<()> {
                 fail_list.push(format!("{}:{}", local_file, err));
             }
             Ok(resp) => {
-                println!("{}: {}", local_file, resp.text().unwrap());
+                info!("{}: {}", local_file, resp.text().unwrap());
             }
         }
     }
@@ -149,11 +172,11 @@ fn ping_server(args: &Args, cfg: &Config) -> anyhow::Result<()> {
     let client = cfg.protocol.new_client()?;
     match client.get(url).send() {
         Err(err) => {
-            eprintln!("ping server err: {}", err);
+            error!("ping server err: {}", err);
             std::process::exit(127);
         }
         Ok(resp) => {
-            println!("{}", resp.text().unwrap_or_default());
+            info!("{}", resp.text().unwrap_or_default());
             std::process::exit(0);
         }
     }
@@ -213,7 +236,21 @@ impl Config {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    println!("args: {:?}", args);
+
+    env_logger::builder()
+        .format(move |buf, record| {
+            let level = record.level();
+            let style = buf.default_level_style(level);
+            let time = Local::now().format("%Y-%m-%d %H:%M:%S");
+            let args = record.args();
+            let target = record.target();
+            buf.write_fmt(format_args!(
+                "[{time} {style}{level}{style:#} {target}] {args}\n",
+            ))
+        })
+        .filter_level(args.global.log_filter_level())
+        .init();
+    debug!("args: {:?}", args);
 
     let cfg = Config::new(&args);
 
