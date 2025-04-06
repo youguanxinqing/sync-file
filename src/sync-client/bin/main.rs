@@ -1,5 +1,6 @@
 use chrono::Local;
 use clap::{arg, command, ArgAction, Args as ClapArgs, Parser};
+use lib::apis::urls;
 use log::{debug, error, info, LevelFilter};
 use std::io::prelude::Write;
 use std::{collections::HashMap, fs, path};
@@ -84,7 +85,7 @@ fn upload_file(args: &Args, cfg: &Config) -> anyhow::Result<()> {
         .text("target_file_path", args.remote_file_path.clone().unwrap())
         .part("file", file_part);
 
-    let url = format!("{}://{}/upload", cfg.protocol.data(), args.addr);
+    let url = urls::UPLOAD_URL_V1!(cfg.protocol.data(), args.addr);
     let client = cfg.protocol.new_client()?;
     let request = (if args.host.is_some() {
         client.post(url).header("Host", args.host.clone().unwrap())
@@ -127,7 +128,7 @@ fn upload_file_mappings(args: &Args, cfg: &Config) -> anyhow::Result<()> {
     let mappings = parse_file_mappings(args.file_mappings.as_ref().unwrap())?;
 
     // http client
-    let url = format!("{}://{}/upload", cfg.protocol.data(), args.addr);
+    let url = urls::UPLOAD_URL_V1!(cfg.protocol.data(), args.addr);
     let client = cfg.protocol.new_client()?;
 
     let mut fail_list = Vec::new();
@@ -168,7 +169,7 @@ fn upload_file_mappings(args: &Args, cfg: &Config) -> anyhow::Result<()> {
 }
 
 fn ping_server(args: &Args, cfg: &Config) -> anyhow::Result<()> {
-    let url = format!("{}://{}/ping", &cfg.protocol.data(), args.addr);
+    let url = urls::PING_URL_V1!(&cfg.protocol.data(), args.addr);
     let client = cfg.protocol.new_client()?;
     match client.get(url).send() {
         Err(err) => {
