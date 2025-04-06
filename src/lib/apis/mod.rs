@@ -1,3 +1,4 @@
+pub mod download;
 pub mod ping;
 pub mod upload;
 
@@ -17,4 +18,12 @@ pub mod urls {
         };
     }
     pub use __UPLOAD_URL_V1 as UPLOAD_URL_V1;
+
+    #[macro_export]
+    macro_rules! __DOWNLOAD_URL_V1 {
+        ($protocol:expr, $addr:expr) => {
+            format!("{}://{}/download", $protocol, $addr)
+        };
+    }
+    pub use __DOWNLOAD_URL_V1 as DOWNLOAD_URL_V1;
 }
