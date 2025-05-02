@@ -24,6 +24,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .route("/ping", web::get().to(apis::ping::ping))
             .route("/upload", web::post().to(apis::upload::upload))
+            .route("/download", web::post().to(apis::download::download_file))
     })
     .bind((args.host, args.port))?
     .run()

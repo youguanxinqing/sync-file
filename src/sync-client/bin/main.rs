@@ -1,6 +1,7 @@
 use chrono::Local;
-use clap::{arg, command, ArgAction, Args as ClapArgs, Parser};
+use clap::{arg, command, ArgAction, Args as ClapArgs, Parser, Subcommand};
 use lib::apis::urls;
+use lib::util::file;
 use log::{debug, error, info, LevelFilter};
 use std::io::prelude::Write;
 use std::{collections::HashMap, fs, path};
@@ -20,6 +21,33 @@ impl Global {
             _ => LevelFilter::Trace,
         }
     }
+}
+
+#[derive(Subcommand, Debug)]
+enum SubCommand {
+    #[command(about = "")]
+    Push,
+
+    #[command(about = "")]
+    Pull(PullArgs),
+
+    #[command(about = "")]
+    Test(TestArgs),
+}
+
+#[derive(ClapArgs, Debug)]
+pub struct TestArgs {
+    #[arg(long, default_value_t = false)]
+    ping: bool,
+}
+
+#[derive(ClapArgs, Debug)]
+pub struct PullArgs {
+    #[arg(
+        long,
+        help = "[local_file1]:[remote_file1],[local_file2]:[remote_file2],..."
+    )]
+    file_mappings: String,
 }
 
 #[derive(Parser, Debug)]
@@ -45,15 +73,15 @@ struct Args {
     #[arg(long)]
     file_mappings: Option<String>,
 
-    #[arg(long, default_value_t = false)]
-    ping: bool,
-
     #[arg(
         long,
         default_value_t = false,
         help = "Enable https request of insecure."
     )]
     enable_insecure_ssl: bool,
+
+    #[command(subcommand)]
+    command: SubCommand,
 }
 
 fn panic_if_not_expect_file(filename: &str) {
@@ -168,8 +196,58 @@ fn upload_file_mappings(args: &Args, cfg: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn ping_server(args: &Args, cfg: &Config) -> anyhow::Result<()> {
-    let url = urls::PING_URL_V1!(&cfg.protocol.data(), args.addr);
+fn download_file_mappings(args: &PullArgs, cfg: &Config) -> anyhow::Result<()> {
+    let mappings = parse_file_mappings(&args.file_mappings)?;
+    if mappings.is_empty() {
+        anyhow::bail!("--file-mapping is invalid: {}", args.file_mappings);
+    };
+
+    let mut fail_list = Vec::new();
+
+    let client = cfg.protocol.new_client()?;
+    for (local_file, remote_path) in mappings.iter() {
+        // 1. download remote file
+        let mut m = HashMap::new();
+        m.insert("file_path", remote_path);
+
+        let url = urls::DOWNLOAD_URL_V1!(cfg.protocol.data(), cfg.addr);
+        let request = (if cfg.header_host.is_some() {
+            client
+                .post(url)
+                .header("Host", cfg.header_host.clone().unwrap())
+        } else {
+            client.post(url)
+        })
+        .json(&m);
+
+        match request.send() {
+            Err(err) => {
+                fail_list.push(format!("{} => {}", local_file, err));
+            }
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    // 2. write to local file
+                    file::create_and_write(local_file, resp.bytes()?)?;
+                } else {
+                    fail_list.push(format!(
+                        "{} => {}",
+                        local_file,
+                        resp.text().unwrap_or("fail to extract text".to_string())
+                    ));
+                }
+            }
+        }
+    }
+
+    if !fail_list.is_empty() {
+        anyhow::bail!("{}", fail_list.join("\n"));
+    }
+
+    Ok(())
+}
+
+fn ping_server(cfg: &Config) -> anyhow::Result<()> {
+    let url = urls::PING_URL_V1!(&cfg.protocol.data(), cfg.addr);
     let client = cfg.protocol.new_client()?;
     match client.get(url).send() {
         Err(err) => {
@@ -177,7 +255,11 @@ fn ping_server(args: &Args, cfg: &Config) -> anyhow::Result<()> {
             std::process::exit(127);
         }
         Ok(resp) => {
-            info!("{}", resp.text().unwrap_or_default());
+            info!(
+                "code: {}, {}",
+                resp.status(),
+                resp.text().unwrap_or_default()
+            );
             std::process::exit(0);
         }
     }
@@ -220,12 +302,16 @@ impl ReqProtocol {
 }
 
 struct Config {
+    addr: String,
+    header_host: Option<String>,
     protocol: ReqProtocol,
 }
 
 impl Config {
     fn new(args: &Args) -> Self {
         Config {
+            addr: args.addr.clone(),
+            header_host: args.host.clone(),
             protocol: ReqProtocol::new(if args.enable_insecure_ssl {
                 "https"
             } else {
@@ -255,13 +341,23 @@ fn main() -> anyhow::Result<()> {
 
     let cfg = Config::new(&args);
 
-    if args.ping {
-        ping_server(&args, &cfg)?;
-    } else if args.file_mappings.is_some() {
-        upload_file_mappings(&args, &cfg)?;
-    } else {
-        validate_for_upload(&args);
-        upload_file(&args, &cfg)?;
+    match args.command {
+        SubCommand::Test(test_args) => {
+            if test_args.ping {
+                ping_server(&cfg)?;
+            }
+        }
+        SubCommand::Pull(pull_args) => {
+            download_file_mappings(&pull_args, &cfg)?;
+        }
+        _ => {
+            if args.file_mappings.is_some() {
+                upload_file_mappings(&args, &cfg)?;
+            } else {
+                validate_for_upload(&args);
+                upload_file(&args, &cfg)?;
+            }
+        }
     }
 
     Ok(())
