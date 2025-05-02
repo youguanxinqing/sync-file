@@ -1,6 +1,7 @@
 use chrono::Local;
 use clap::{arg, command, ArgAction, Args as ClapArgs, Parser, Subcommand};
 use lib::apis::urls;
+use lib::util::file;
 use log::{debug, error, info, LevelFilter};
 use std::io::prelude::Write;
 use std::{collections::HashMap, fs, path};
@@ -42,7 +43,10 @@ pub struct TestArgs {
 
 #[derive(ClapArgs, Debug)]
 pub struct PullArgs {
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "[local_file1]:[remote_file1],[local_file2]:[remote_file2],..."
+    )]
     file_mappings: String,
 }
 
@@ -201,7 +205,7 @@ fn download_file_mappings(args: &PullArgs, cfg: &Config) -> anyhow::Result<()> {
     let mut fail_list = Vec::new();
 
     let client = cfg.protocol.new_client()?;
-    for (remote_path, local_file) in mappings.iter() {
+    for (local_file, remote_path) in mappings.iter() {
         // 1. download remote file
         let mut m = HashMap::new();
         m.insert("file_path", remote_path);
@@ -215,13 +219,22 @@ fn download_file_mappings(args: &PullArgs, cfg: &Config) -> anyhow::Result<()> {
             client.post(url)
         })
         .json(&m);
+
         match request.send() {
             Err(err) => {
-                fail_list.push(format!("{}:{}", local_file, err));
+                fail_list.push(format!("{} => {}", local_file, err));
             }
             Ok(resp) => {
-                // 2. write to local file
-                fs::write(local_file, resp.bytes()?)?;
+                if resp.status().is_success() {
+                    // 2. write to local file
+                    file::create_and_write(local_file, resp.bytes()?)?;
+                } else {
+                    fail_list.push(format!(
+                        "{} => {}",
+                        local_file,
+                        resp.text().unwrap_or("fail to extract text".to_string())
+                    ));
+                }
             }
         }
     }
