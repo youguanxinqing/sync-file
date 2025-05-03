@@ -23,6 +23,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
             .route("/ping", web::get().to(apis::ping::ping))
+            .route("/", web::post().to(apis::upload::upload))
             .route("/upload", web::post().to(apis::upload::upload))
             .route("/download", web::post().to(apis::download::download_file))
     })

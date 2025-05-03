@@ -128,6 +128,14 @@ fn upload_file(args: &PushArgs, cfg: &Config) -> anyhow::Result<()> {
             error!("send request err: {}", err);
             std::process::exit(127);
         }
+        Ok(resp) if !resp.status().is_success() => {
+            error!(
+                "send request err: code={}, {}",
+                resp.status(),
+                resp.text().unwrap_or_default()
+            );
+            std::process::exit(127);
+        }
         Ok(resp) => {
             info!("{}", resp.text().unwrap());
             std::process::exit(0);
@@ -179,6 +187,9 @@ fn upload_file_mappings(args: &PushArgs, cfg: &Config) -> anyhow::Result<()> {
             Err(err) => {
                 fail_list.push(format!("{} => {}", local_file, err));
             }
+            Ok(resp) if !resp.status().is_success() => {
+                fail_list.push(format!("{} => {}", local_file, resp.status()));
+            }
             Ok(resp) => {
                 info!("{} => {}", local_file, resp.text().unwrap());
             }
@@ -212,17 +223,12 @@ fn download_file_mappings(args: &PullArgs, cfg: &Config) -> anyhow::Result<()> {
             Err(err) => {
                 fail_list.push(format!("{} => {}", local_file, err));
             }
+            Ok(resp) if !resp.status().is_success() => {
+                fail_list.push(format!("{} => {}", local_file, resp.status()));
+            }
             Ok(resp) => {
-                if resp.status().is_success() {
-                    // 2. write to local file
-                    file::create_and_write(local_file, resp.bytes()?)?;
-                } else {
-                    fail_list.push(format!(
-                        "{} => {}",
-                        local_file,
-                        resp.text().unwrap_or("fail to extract text".to_string())
-                    ));
-                }
+                // 2. write to local file
+                file::create_and_write(local_file, resp.bytes()?)?;
             }
         }
     }
@@ -240,6 +246,14 @@ fn ping_server(cfg: &Config) -> anyhow::Result<()> {
     match client.get(url).send() {
         Err(err) => {
             error!("ping server err: {}", err);
+            std::process::exit(127);
+        }
+        Ok(resp) if !resp.status().is_success() => {
+            error!(
+                "ping server err: code={}, {}",
+                resp.status(),
+                resp.text().unwrap_or_default()
+            );
             std::process::exit(127);
         }
         Ok(resp) => {
