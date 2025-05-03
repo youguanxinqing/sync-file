@@ -3,6 +3,8 @@ use clap::{arg, command, ArgAction, Args as ClapArgs, Parser, Subcommand};
 use lib::apis::urls;
 use lib::util::file;
 use log::{debug, error, info, LevelFilter};
+use reqwest::blocking::RequestBuilder;
+use reqwest::IntoUrl;
 use std::io::prelude::Write;
 use std::{collections::HashMap, fs, path};
 
@@ -25,13 +27,13 @@ impl Global {
 
 #[derive(Subcommand, Debug)]
 enum SubCommand {
-    #[command(about = "")]
-    Push,
+    #[command(about = "Push local file to remote device.")]
+    Push(PushArgs),
 
-    #[command(about = "")]
+    #[command(about = "Pull file from remote file.")]
     Pull(PullArgs),
 
-    #[command(about = "")]
+    #[command(about = "Test operations.")]
     Test(TestArgs),
 }
 
@@ -39,6 +41,24 @@ enum SubCommand {
 pub struct TestArgs {
     #[arg(long, default_value_t = false)]
     ping: bool,
+}
+
+#[derive(ClapArgs, Debug)]
+pub struct PushArgs {
+    #[arg(long, default_value_t = String::from("safe"))]
+    action: String,
+
+    #[arg(long)]
+    local_file_path: Option<String>,
+
+    #[arg(long)]
+    remote_file_path: Option<String>,
+
+    #[arg(
+        long,
+        help = "[local_file1]:[remote_file1],[local_file2]:[remote_file2],..."
+    )]
+    file_mappings: Option<String>,
 }
 
 #[derive(ClapArgs, Debug)]
@@ -58,20 +78,8 @@ struct Args {
     #[arg(long)]
     addr: String,
 
-    #[arg(long, default_value_t = String::from("safe"))]
-    action: String,
-
-    #[arg(long)]
-    local_file_path: Option<String>,
-
-    #[arg(long)]
-    remote_file_path: Option<String>,
-
     #[arg(long, help = "Specify HOST in request header")]
     host: Option<String>,
-
-    #[arg(long)]
-    file_mappings: Option<String>,
 
     #[arg(
         long,
@@ -98,11 +106,11 @@ fn panic_if_not_expect_file(filename: &str) {
     }
 }
 
-fn validate_for_upload(args: &Args) {
+fn validate_for_upload(args: &PushArgs) {
     panic_if_not_expect_file(&args.local_file_path.clone().unwrap_or_default());
 }
 
-fn upload_file(args: &Args, cfg: &Config) -> anyhow::Result<()> {
+fn upload_file(args: &PushArgs, cfg: &Config) -> anyhow::Result<()> {
     let file_strem = fs::read(args.local_file_path.clone().unwrap().as_str()).unwrap();
     let file_part = reqwest::blocking::multipart::Part::bytes(file_strem)
         .file_name("file")
@@ -113,14 +121,8 @@ fn upload_file(args: &Args, cfg: &Config) -> anyhow::Result<()> {
         .text("target_file_path", args.remote_file_path.clone().unwrap())
         .part("file", file_part);
 
-    let url = urls::UPLOAD_URL_V1!(cfg.protocol.data(), args.addr);
-    let client = cfg.protocol.new_client()?;
-    let request = (if args.host.is_some() {
-        client.post(url).header("Host", args.host.clone().unwrap())
-    } else {
-        client.post(url)
-    })
-    .multipart(multipart_form);
+    let url = urls::UPLOAD_URL_V1!(cfg.protocol.data(), cfg.addr);
+    let request = cfg.make_request(url)?.multipart(multipart_form);
     match request.send() {
         Err(err) => {
             error!("send request err: {}", err);
@@ -151,13 +153,12 @@ fn parse_file_mappings(mappings: &str) -> anyhow::Result<HashMap<String, String>
     Ok(m)
 }
 
-fn upload_file_mappings(args: &Args, cfg: &Config) -> anyhow::Result<()> {
+fn upload_file_mappings(args: &PushArgs, cfg: &Config) -> anyhow::Result<()> {
     // parse file mappings
     let mappings = parse_file_mappings(args.file_mappings.as_ref().unwrap())?;
 
     // http client
-    let url = urls::UPLOAD_URL_V1!(cfg.protocol.data(), args.addr);
-    let client = cfg.protocol.new_client()?;
+    let url = urls::UPLOAD_URL_V1!(cfg.protocol.data(), cfg.addr);
 
     let mut fail_list = Vec::new();
 
@@ -173,18 +174,13 @@ fn upload_file_mappings(args: &Args, cfg: &Config) -> anyhow::Result<()> {
             .part("file", file_part);
 
         // make http request
-        let request = (if args.host.is_some() {
-            client.post(&url).header("Host", args.host.clone().unwrap())
-        } else {
-            client.post(&url)
-        })
-        .multipart(multipart_form);
+        let request = cfg.make_request(&url)?.multipart(multipart_form);
         match request.send() {
             Err(err) => {
-                fail_list.push(format!("{}:{}", local_file, err));
+                fail_list.push(format!("{} => {}", local_file, err));
             }
             Ok(resp) => {
-                info!("{}: {}", local_file, resp.text().unwrap());
+                info!("{} => {}", local_file, resp.text().unwrap());
             }
         }
     }
@@ -204,21 +200,13 @@ fn download_file_mappings(args: &PullArgs, cfg: &Config) -> anyhow::Result<()> {
 
     let mut fail_list = Vec::new();
 
-    let client = cfg.protocol.new_client()?;
     for (local_file, remote_path) in mappings.iter() {
         // 1. download remote file
         let mut m = HashMap::new();
         m.insert("file_path", remote_path);
 
         let url = urls::DOWNLOAD_URL_V1!(cfg.protocol.data(), cfg.addr);
-        let request = (if cfg.header_host.is_some() {
-            client
-                .post(url)
-                .header("Host", cfg.header_host.clone().unwrap())
-        } else {
-            client.post(url)
-        })
-        .json(&m);
+        let request = cfg.make_request(url)?.json(&m);
 
         match request.send() {
             Err(err) => {
@@ -308,6 +296,20 @@ struct Config {
 }
 
 impl Config {
+    fn make_request<U: IntoUrl>(&self, url: U) -> anyhow::Result<RequestBuilder> {
+        let client = self.protocol.new_client()?;
+        let request = if self.header_host.is_some() {
+            client
+                .post(url)
+                .header("Host", self.header_host.clone().unwrap())
+        } else {
+            client.post(url)
+        };
+        Ok(request)
+    }
+}
+
+impl Config {
     fn new(args: &Args) -> Self {
         Config {
             addr: args.addr.clone(),
@@ -350,13 +352,18 @@ fn main() -> anyhow::Result<()> {
         SubCommand::Pull(pull_args) => {
             download_file_mappings(&pull_args, &cfg)?;
         }
-        _ => {
-            if args.file_mappings.is_some() {
-                upload_file_mappings(&args, &cfg)?;
+        SubCommand::Push(push_args) => {
+            if push_args.file_mappings.is_some() {
+                upload_file_mappings(&push_args, &cfg)?;
             } else {
-                validate_for_upload(&args);
-                upload_file(&args, &cfg)?;
+                validate_for_upload(&push_args);
+                upload_file(&push_args, &cfg)?;
             }
+        }
+        #[allow(unreachable_patterns)]
+        _ => {
+            error!("Invalid subcommand");
+            std::process::exit(127);
         }
     }
 
